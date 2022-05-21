@@ -1,4 +1,4 @@
-# Makefile for Proxy Lab 
+# Makefile for Proxy Lab
 #
 # You may modify this file any way you like (except for the handin
 # rule). You instructor will type "make" on your specific Makefile to
@@ -7,7 +7,7 @@
 CC = gcc
 CFLAGS = -g -Wall
 LDFLAGS = -lpthread
-STUNO = 2021-12345
+STUNO = 2019-18873
 
 all: proxy
 
@@ -27,4 +27,3 @@ handin:
 
 clean:
 	rm -f *~ *.o proxy core *.tar *.zip *.gzip *.bzip *.gz
-
