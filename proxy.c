@@ -1,6 +1,6 @@
 /**
  * @file proxy.c
- * @author Subin Song (lemonshushuu@gmail.com)
+ * @author Subin Song (sbsong66@snu.ac.kr)
  * @brief Proxy server
  * @version 0.1
  * @date 2022-05-21
@@ -13,7 +13,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include "csapp.h"
-#include <time.h>
 
 /* Recommended max cache and object sizes */
 #define MAX_CACHE_SIZE 1049000
