@@ -13,6 +13,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "csapp.h"
+#include <time.h>
 
 /* Recommended max cache and object sizes */
 #define MAX_CACHE_SIZE 1049000
@@ -53,27 +54,44 @@ void close_wrapper(int fd);
 void print_full(char *string);
 void print_struct(Request *req);
 
-// typedef struct CachedItem CachedItem;
+typedef struct CachedItem CachedItem;
 
-// struct CachedItem
-// {
-// };
+struct CachedItem
+{
+    char *url;
+    char *item;
+    int size;
+    CachedItem *prev;
+    CachedItem *next;
+};
 
-// typedef struct
-// {
+/**
+ * @brief Ordered by most recent
+ *
+ */
+typedef struct
+{
+    CachedItem *head;
+    CachedItem *tail;
+    int size;
+} CacheList;
 
-// } CacheList;
+extern void cache_init(CacheList *list);
+extern void cache_URL(char *URL, void *item, size_t size, CacheList *list);
+extern void evict(CacheList *list);
+extern CachedItem *find(char *URL, CacheList *list);
+extern void move_to_front(char *URL, CacheList *list);
+extern void print_URLs(CacheList *list);
+extern void cache_destruct(CacheList *list);
+void cache_insert(char *URL, void *item, size_t size, CacheList *list);
+char *get_from_cache_helper(char *key);
 
-// extern void cache_init(CacheList *list);
-// extern void cache_URL(char *URL, void *item, size_t size, CacheList *list);
-// extern void evict(CacheList *list);
-// extern CachedItem *find(char *URL, CacheList *list);
-// extern void move_to_front(char *URL, CacheList *list);
-// extern void print_URLs(CacheList *list);
-// extern void cache_destruct(CacheList *list);
+CacheList *cache;
 
 int main(int argc, char **argv)
 {
+    cache = (CacheList *)malloc(sizeof(CacheList));
+    cache_init(cache);
     int listenfd, *connfd;
     socklen_t clientlen;
     struct sockaddr_storage clientaddr; /* Enough space for any address */
@@ -81,7 +99,7 @@ int main(int argc, char **argv)
 
     if (argc != 2)
     {
-        fprintf(stderr, "usage: %s <port>\n", argv[0]);
+        printf("usage: %s <port>\n", argv[0]);
         exit(0);
     }
 
@@ -94,6 +112,7 @@ int main(int argc, char **argv)
         Pthread_create(&tid, NULL, handle_client, connfd);
     }
     printf("%s", user_agent);
+    cache_destruct(cache);
     return 0;
 }
 
@@ -128,17 +147,18 @@ void *handle_client(void *vargp)
     print_struct(&req); // after
 
     // check if the request is in the cache
+    // int in_cache = 0;
     int in_cache = get_from_cache(&req, clientfd);
     if (in_cache == 1)
     {
         printf("In cache\n");
-        close_wrapper(clientfd);
     }
     else
     {
         printf("Not in cache\n");
         get_from_server(&req, request, clientfd, rio_to_client);
     }
+    print_URLs(cache);
     close_wrapper(clientfd);
     return NULL;
 }
@@ -285,7 +305,31 @@ void assemble_request(Request *req, char *request)
 
 int get_from_cache(Request *req, int clientfd)
 {
-    return 0;
+    char *key = req->url;
+    char *value = get_from_cache_helper(key);
+    if (value == NULL)
+        return 0;
+    else
+    {
+        printf("Found in cache\n");
+        move_to_front(key, cache);
+        Rio_writen(clientfd, value, strlen(value));
+        return 1;
+    }
+}
+
+/**
+ * @brief: get the value of the key(url) from cache using find() function
+ * @param key: the key(url) to be searched
+ * @return: the value of the key if found, NULL otherwise
+ */
+char *get_from_cache_helper(char *key)
+{
+    CachedItem *item = find(key, cache);
+    if (item == NULL)
+        return NULL;
+    else
+        return item->item;
 }
 
 /**
@@ -311,12 +355,24 @@ void get_from_server(Request *req, char request[MAXLINE], int clientfd, rio_t ri
     assemble_request(req, request);
     printf("%s", request);
     Rio_writen(serverfd, request, strlen(request));
+    void *full_response = malloc(MAX_OBJECT_SIZE);
+    int full_response_size = 0;
     while ((n = Rio_readlineb(&rio_to_server, buf, MAXLINE)) != 0)
     {
-        printf("server received %d bytes\n", (int)n);
+        if (full_response_size + n <= MAX_OBJECT_SIZE)
+        {
+            memcpy(full_response + full_response_size, buf, n);
+            full_response_size += n;
+        }
+
         Rio_writen(clientfd, buf, n);
     }
-    close_wrapper(serverfd);
+    if (full_response_size <= MAX_OBJECT_SIZE)
+    {
+        cache_URL(req->url, full_response, strlen(full_response), cache);
+    }
+    free(full_response);
+    Close(serverfd);
 }
 void close_wrapper(int fd)
 {
@@ -328,23 +384,133 @@ void print_full(char *string)
 }
 void print_struct(Request *req)
 {
-    fprintf(stderr, "Method: %s\n", req->method == NULL ? "NULL" : req->method);
-    fprintf(stderr, "URL: %s\n", req->url == NULL ? "NULL" : req->url);
-    fprintf(stderr, "Hostname: %s\n", req->hostname == NULL ? "NULL" : req->hostname);
-    fprintf(stderr, "Port: %s\n", req->port == NULL ? "NULL" : req->port);
-    fprintf(stderr, "Path: %s\n", req->path == NULL ? "NULL" : req->path);
-    fprintf(stderr, "Version: %s\n", req->version == NULL ? "NULL" : req->version);
+    printf("Method: %s\n", req->method == NULL ? "NULL" : req->method);
+    printf("URL: %s\n", req->url == NULL ? "NULL" : req->url);
+    printf("Hostname: %s\n", req->hostname == NULL ? "NULL" : req->hostname);
+    printf("Port: %s\n", req->port == NULL ? "NULL" : req->port);
+    printf("Path: %s\n", req->path == NULL ? "NULL" : req->path);
+    printf("Version: %s\n", req->version == NULL ? "NULL" : req->version);
     for (int i = 0; i < req->num_headers; i++)
     {
-        fprintf(stderr, "Header %d: %s: %s\n", i, req->headers[i].name, req->headers[i].value);
+        printf("Header %d: %s: %s\n", i, req->headers[i].name, req->headers[i].value);
     }
-    fprintf(stderr, "\n");
+    printf("\n");
 }
 
-// extern void cache_init(CacheList *list) {}
-// extern void cache_URL(char *URL, void *item, size_t size, CacheList *list) {}
-// extern void evict(CacheList *list) {}
-// extern CachedItem *find(char *URL, CacheList *list) {}
-// extern void move_to_front(char *URL, CacheList *list) {}
-// extern void print_URLs(CacheList *list) {}
-// extern void cache_destruct(CacheList *list) {}
+extern void cache_init(CacheList *list)
+{
+    list->head = NULL;
+    list->tail = NULL;
+    list->size = 0;
+}
+extern void cache_URL(char *URL, void *item, size_t size, CacheList *list)
+{
+    while (list->size + size > MAX_CACHE_SIZE)
+    {
+        evict(list);
+    }
+    cache_insert(URL, item, size, list);
+}
+
+/**
+ * @brief Evict the last item in the cache
+ *
+ * @param list
+ */
+extern void evict(CacheList *list)
+{
+    if (list->tail == NULL)
+        return;
+    CachedItem *item = list->tail;
+    list->tail = item->prev;
+    if (list->tail == NULL)
+        list->head = NULL;
+    else
+        list->tail->next = NULL;
+    list->size -= item->size;
+    free(item->url);
+    free(item->item);
+    free(item);
+}
+
+void cache_insert(char *URL, void *item, size_t size, CacheList *list)
+{
+    CachedItem *node = malloc(sizeof(CachedItem));
+    node->url = malloc((strlen(URL) + 1) * sizeof(char));
+    strcpy(node->url, URL);
+    node->item = malloc(size);
+    memcpy(node->item, item, size);
+    node->size = size;
+    node->next = NULL;
+    node->prev = NULL;
+    if (list->head == NULL)
+    {
+        list->head = node;
+        list->tail = node;
+    }
+    else
+    {
+        list->tail->next = node;
+        node->prev = list->tail;
+        list->tail = node;
+    }
+    list->size += size;
+}
+
+extern CachedItem *find(char *URL, CacheList *list)
+{
+    CachedItem *item = list->head;
+    while (item != NULL)
+    {
+        if (strcmp(item->url, URL) == 0)
+        {
+            return item;
+        }
+        item = item->next;
+    }
+    return NULL;
+}
+extern void move_to_front(char *URL, CacheList *list)
+{
+    CachedItem *item = find(URL, list);
+    if (item == NULL)
+        return;
+    if (item == list->head)
+        return;
+    if (item == list->tail)
+    {
+        list->tail = item->prev;
+        list->tail->next = NULL;
+    }
+    else
+    {
+        item->prev->next = item->next;
+        item->next->prev = item->prev;
+    }
+    item->next = list->head;
+    list->head->prev = item;
+    list->head = item;
+    item->prev = NULL;
+}
+extern void print_URLs(CacheList *list)
+{
+    printf("-----------\n");
+    CachedItem *item = list->head;
+    while (item != NULL)
+    {
+        printf("%s\n", item->url);
+        item = item->next;
+    }
+    printf("-----------\n");
+}
+extern void cache_destruct(CacheList *list)
+{
+    CachedItem *item = list->head;
+    while (item != NULL)
+    {
+        CachedItem *next = item->next;
+        free(item->url);
+        free(item);
+        item = next;
+    }
+}
