@@ -146,7 +146,6 @@ void *handle_client(void *vargp)
     print_struct(&req); // after
 
     // check if the request is in the cache
-    // int in_cache = 0;
     int in_cache = get_from_cache(&req, clientfd);
     if (in_cache == 1)
     {
@@ -253,6 +252,7 @@ void parse_header(char header[MAXLINE], Request *req)
     free(line);
 }
 
+/** add headers to the request */
 void add_headers(Request *req)
 {
     int host_header_exists = 0;
@@ -311,6 +311,7 @@ int get_from_cache(Request *req, int clientfd)
     else
     {
         printf("Found in cache\n");
+        /** move the last used cache to the front to maintain LRU alignment */
         move_to_front(key, cache);
         Rio_writen(clientfd, value, strlen(value));
         return 1;
@@ -360,6 +361,7 @@ void get_from_server(Request *req, char request[MAXLINE], int clientfd, rio_t ri
     {
         if (full_response_size + n <= MAX_OBJECT_SIZE)
         {
+            /** copy the response buffer to the full_response */
             memcpy(full_response + full_response_size, buf, n);
             full_response_size += n;
         }
@@ -368,6 +370,7 @@ void get_from_server(Request *req, char request[MAXLINE], int clientfd, rio_t ri
     }
     if (full_response_size <= MAX_OBJECT_SIZE)
     {
+        /** add to cache */
         cache_URL(req->url, full_response, strlen(full_response), cache);
     }
     free(full_response);
@@ -402,6 +405,13 @@ extern void cache_init(CacheList *list)
     list->tail = NULL;
     list->size = 0;
 }
+
+/** @brief: add a new item to the cache
+ *  @param key: the key(url) to be added
+ *  @param value: the value of the key
+ *  @param size: the size of the value
+ *  @param list: the cache list
+ */
 extern void cache_URL(char *URL, void *item, size_t size, CacheList *list)
 {
     while (list->size + size > MAX_CACHE_SIZE)
@@ -432,6 +442,12 @@ extern void evict(CacheList *list)
     free(item);
 }
 
+/** @brief: insert a new item to the cache
+ *  @param key: the key(url) to be added
+ *  @param value: the value of the key
+ *  @param size: the size of the value
+ *  @param list: the cache list
+ */
 void cache_insert(char *URL, void *item, size_t size, CacheList *list)
 {
     CachedItem *node = malloc(sizeof(CachedItem));
@@ -456,6 +472,11 @@ void cache_insert(char *URL, void *item, size_t size, CacheList *list)
     list->size += size;
 }
 
+/** @brief: find a key in the cache
+ *  @param key: the key(url) to be searched
+ *  @param list: the cache list
+ *  @return: the value of the key if found, NULL otherwise
+ */
 extern CachedItem *find(char *URL, CacheList *list)
 {
     CachedItem *item = list->head;
@@ -469,6 +490,7 @@ extern CachedItem *find(char *URL, CacheList *list)
     }
     return NULL;
 }
+
 extern void move_to_front(char *URL, CacheList *list)
 {
     CachedItem *item = find(URL, list);
