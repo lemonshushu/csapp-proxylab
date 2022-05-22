@@ -1,0 +1,55 @@
+Method: GET
+URL: http://localhost:6127/home.html
+Hostname: localhost
+Port: 6127
+Path: home.html
+Version: HTTP/1.1
+Header 0: Host: localhost
+Header 1: User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3
+Header 2: Connection: close
+Header 3: Proxy-Connection: close
+
+Method: GET
+URL: http://localhost:6127/csapp.c
+Hostname: localhost
+Port: 6127
+Path: csapp.c
+Version: HTTP/1.1
+Header 0: Host: localhost
+Header 1: User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3
+Header 2: Connection: close
+Header 3: Proxy-Connection: close
+
+Method: GET
+URL: http://localhost:6127/tiny.c
+Hostname: localhost
+Port: 6127
+Path: tiny.c
+Version: HTTP/1.1
+Header 0: Host: localhost
+Header 1: User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3
+Header 2: Connection: close
+Header 3: Proxy-Connection: close
+
+Method: GET
+URL: http://localhost:6127/godzilla.jpg
+Hostname: localhost
+Port: 6127
+Path: godzilla.jpg
+Version: HTTP/1.1
+Header 0: Host: localhost
+Header 1: User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3
+Header 2: Connection: close
+Header 3: Proxy-Connection: close
+
+Method: GET
+URL: http://localhost:6127/tiny
+Hostname: localhost
+Port: 6127
+Path: tiny
+Version: HTTP/1.1
+Header 0: Host: localhost
+Header 1: User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3
+Header 2: Connection: close
+Header 3: Proxy-Connection: close
+

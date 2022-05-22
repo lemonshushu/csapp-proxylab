@@ -10,17 +10,18 @@
  */
 
 #include <stdio.h>
+// #include "csapp.h"
 #include <string.h>
 #include <stdlib.h>
-#include "csapp.h"
 
 /* Recommended max cache and object sizes */
 #define MAX_CACHE_SIZE 1049000
 #define MAX_OBJECT_SIZE 102400
 #define MAX_HEADERS 100
+#define MAXLINE 1000
 
 /* You won't lose style points for including this long line in your code */
-static const char *user_agent = "Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3";
+static const char *user_agent = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
 
 typedef struct
 {
@@ -48,96 +49,25 @@ void parse_header(char header[MAXLINE], Request *req);
 void add_headers(Request *req);
 void assemble_request(Request *req, char *request);
 int get_from_cache(Request *req, int clientfd);
-void get_from_server(Request *req, char request[MAXLINE], int clientfd, rio_t rio_to_client);
+// void get_from_server(Request *req, char request[MAXLINE], int clientfd, rio_t rio_to_client);
 void close_wrapper(int fd);
 void print_full(char *string);
 void print_struct(Request *req);
 
-// typedef struct CachedItem CachedItem;
-
-// struct CachedItem
-// {
-// };
-
-// typedef struct
-// {
-
-// } CacheList;
-
-// extern void cache_init(CacheList *list);
-// extern void cache_URL(char *URL, void *item, size_t size, CacheList *list);
-// extern void evict(CacheList *list);
-// extern CachedItem *find(char *URL, CacheList *list);
-// extern void move_to_front(char *URL, CacheList *list);
-// extern void print_URLs(CacheList *list);
-// extern void cache_destruct(CacheList *list);
-
 int main(int argc, char **argv)
 {
-    int listenfd, connfd;
-    socklen_t clientlen;
-    struct sockaddr_storage clientaddr; /* Enough space for any address */
-    pthread_t tid;
 
-    if (argc != 2)
-    {
-        fprintf(stderr, "usage: %s <port>\n", argv[0]);
-        exit(0);
-    }
-
-    listenfd = Open_listenfd(argv[1]);
-    while (1)
-    {
-        clientlen = sizeof(struct sockaddr_storage);
-        connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
-        Pthread_create(&tid, NULL, handle_client, (void *)connfd);
-    }
-    printf("%s", user_agent);
-    return 0;
-}
-
-void *handle_client(void *vargp)
-{
-    int clientfd = (int)vargp;
-    char request[MAXLINE];
-    rio_t rio_to_client;
-    rio_readinitb(&rio_to_client, clientfd);
-
-    // read the request
-    rio_readlineb(&rio_to_client, request, MAXLINE);
+    char request[] = "GET /index.html HTTP/1.1\r\nHost: www.google.com\r\nConnection: keep-alive\r\n\r\n";
 
     // parse the request
     Request req;
     initialize_struct(&req);
     parse_request(request, &req);
-    if (strcmp(req.method, "GET") != 0) // Only support get
-    {
-        printf("%s", user_agent);
-        printf("%s", request);
-        printf("%s", "HTTP/1.0 501 Not Implemented\r\n");
-        printf("%s", "Content-type: text/html\r\n\r\n");
-        printf("%s", "<html><head><title>Not Implemented</title></head>");
-        printf("%s", "<body><p>HTTP request method not supported.</p></body></html>");
-        close_wrapper(clientfd);
-        return NULL;
-    }
+    print_struct(&req); // before
     add_headers(&req);
     print_struct(&req); // after
-
-    // check if the request is in the cache
-    int in_cache = get_from_cache(&req, clientfd);
-    if (in_cache == 1)
-    {
-        printf("In cache\n");
-        close_wrapper(clientfd);
-    }
-    else
-    {
-        printf("Not in cache\n");
-        get_from_server(&req, request, clientfd, rio_to_client);
-    }
-    close_wrapper(clientfd);
-    return NULL;
+    char assembled[1000];
+    assemble_request(&req, assembled);
 }
 
 void initialize_struct(Request *req)
@@ -220,7 +150,7 @@ void parse_header(char header[MAXLINE], Request *req)
     char *saveptr;
     char *line = strdup(header);
     token = strtok_r(line, ": ", &saveptr);
-    if (strcmp(token, "Host") == 0 || strcmp(token, "User-Agent") == 0 || strcmp(token, "Connection") == 0 || strcmp(token, "Proxy-Connection") == 0)
+    if (strcmp(token, "User-Agent") == 0 || strcmp(token, "Connection") == 0 || strcmp(token, "Proxy-Connection") == 0)
         return;
     strcpy(req->headers[req->num_headers].name, token);
     strcpy(req->headers[req->num_headers].value, saveptr);
@@ -273,68 +203,20 @@ void assemble_request(Request *req, char *request)
     }
     strcat(request, "\r\n");
 }
-
-int get_from_cache(Request *req, int clientfd)
-{
-    return 0;
-}
-
-/**
- * @brief Get the from server object
- *
- * @param req The request object
- * @param request The request string
- * @param clientfd The client file descriptor
- * @param rio_to_client The rio object to the client
- */
-void get_from_server(Request *req, char request[MAXLINE], int clientfd, rio_t rio_to_client)
-{
-    int serverfd;
-    char response[MAXLINE];
-    rio_t rio_to_server;
-
-    char *hostname = req->hostname;
-    char *port = req->port;
-    serverfd = Open_clientfd(hostname, port);
-
-    Rio_readinitb(&rio_to_server, serverfd);
-    assemble_request(req, request);
-    Rio_writen(serverfd, request, strlen(request));
-
-    // TODO : 데이터 짤려먹는거 고치기...
-    while (Rio_readlineb(&rio_to_server, response, MAXLINE) > 0)
-    {
-        Rio_writen(clientfd, response, strlen(response));
-    }
-    close_wrapper(serverfd);
-}
-void close_wrapper(int fd)
-{
-    Close(fd);
-}
 void print_full(char *string)
 {
     printf("%s\n", string);
 }
 void print_struct(Request *req)
 {
-    fprintf(stderr, "Method: %s\n", req->method == NULL ? "NULL" : req->method);
-    fprintf(stderr, "URL: %s\n", req->url == NULL ? "NULL" : req->url);
-    fprintf(stderr, "Hostname: %s\n", req->hostname == NULL ? "NULL" : req->hostname);
-    fprintf(stderr, "Port: %s\n", req->port == NULL ? "NULL" : req->port);
-    fprintf(stderr, "Path: %s\n", req->path == NULL ? "NULL" : req->path);
-    fprintf(stderr, "Version: %s\n", req->version == NULL ? "NULL" : req->version);
+    printf("Method: %s\n", req->method == NULL ? "NULL" : req->method);
+    printf("URL: %s\n", req->url == NULL ? "NULL" : req->url);
+    printf("Hostname: %s\n", req->hostname == NULL ? "NULL" : req->hostname);
+    printf("Port: %s\n", req->port == NULL ? "NULL" : req->port);
+    printf("Path: %s\n", req->path == NULL ? "NULL" : req->path);
+    printf("Version: %s\n", req->version == NULL ? "NULL" : req->version);
     for (int i = 0; i < req->num_headers; i++)
     {
-        fprintf(stderr, "Header %d: %s: %s\n", i, req->headers[i].name, req->headers[i].value);
+        printf("Header %d: %s: %s\n", i, req->headers[i].name, req->headers[i].value);
     }
-    fprintf(stderr, "\n");
 }
-
-// extern void cache_init(CacheList *list) {}
-// extern void cache_URL(char *URL, void *item, size_t size, CacheList *list) {}
-// extern void evict(CacheList *list) {}
-// extern CachedItem *find(char *URL, CacheList *list) {}
-// extern void move_to_front(char *URL, CacheList *list) {}
-// extern void print_URLs(CacheList *list) {}
-// extern void cache_destruct(CacheList *list) {}
