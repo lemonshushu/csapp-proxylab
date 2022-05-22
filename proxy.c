@@ -74,7 +74,7 @@ void print_struct(Request *req);
 
 int main(int argc, char **argv)
 {
-    int listenfd, connfd;
+    int listenfd, *connfd;
     socklen_t clientlen;
     struct sockaddr_storage clientaddr; /* Enough space for any address */
     pthread_t tid;
@@ -89,8 +89,9 @@ int main(int argc, char **argv)
     while (1)
     {
         clientlen = sizeof(struct sockaddr_storage);
-        connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
-        Pthread_create(&tid, NULL, handle_client, (void *)connfd);
+        connfd = Malloc(sizeof(int));
+        *connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
+        Pthread_create(&tid, NULL, handle_client, connfd);
     }
     printf("%s", user_agent);
     return 0;
@@ -98,7 +99,9 @@ int main(int argc, char **argv)
 
 void *handle_client(void *vargp)
 {
-    int clientfd = (int)vargp;
+    int clientfd = *((int *)vargp);
+    Pthread_detach(pthread_self());
+    Free(vargp);
     char request[MAXLINE];
     rio_t rio_to_client;
     rio_readinitb(&rio_to_client, clientfd);
@@ -221,7 +224,10 @@ void parse_header(char header[MAXLINE], Request *req)
     char *line = strdup(header);
     token = strtok_r(line, ": ", &saveptr);
     if (strcmp(token, "Host") == 0 || strcmp(token, "User-Agent") == 0 || strcmp(token, "Connection") == 0 || strcmp(token, "Proxy-Connection") == 0)
+    {
+        free(line);
         return;
+    }
     strcpy(req->headers[req->num_headers].name, token);
     strcpy(req->headers[req->num_headers].value, saveptr);
     req->num_headers++;
@@ -242,7 +248,10 @@ void add_headers(Request *req)
     if (!host_header_exists)
     {
         strcpy(req->headers[req->num_headers].name, "Host");
-        strcpy(req->headers[req->num_headers].value, req->hostname);
+        if (strlen(req->port) == 0)
+            sprintf(req->headers[req->num_headers].value, "%s", req->hostname);
+        else
+            sprintf(req->headers[req->num_headers].value, "%s:%s", req->hostname, req->port);
         req->num_headers++;
     }
     strcpy(req->headers[req->num_headers].name, "User-Agent");
@@ -289,8 +298,9 @@ int get_from_cache(Request *req, int clientfd)
  */
 void get_from_server(Request *req, char request[MAXLINE], int clientfd, rio_t rio_to_client)
 {
+    size_t n;
     int serverfd;
-    char response[MAXLINE];
+    char buf[MAXLINE];
     rio_t rio_to_server;
 
     char *hostname = req->hostname;
@@ -299,12 +309,12 @@ void get_from_server(Request *req, char request[MAXLINE], int clientfd, rio_t ri
 
     Rio_readinitb(&rio_to_server, serverfd);
     assemble_request(req, request);
+    printf("%s", request);
     Rio_writen(serverfd, request, strlen(request));
-
-    // TODO : 데이터 짤려먹는거 고치기...
-    while (Rio_readlineb(&rio_to_server, response, MAXLINE) > 0)
+    while ((n = Rio_readlineb(&rio_to_server, buf, MAXLINE)) != 0)
     {
-        Rio_writen(clientfd, response, strlen(response));
+        printf("server received %d bytes\n", (int)n);
+        Rio_writen(clientfd, buf, n);
     }
     close_wrapper(serverfd);
 }
